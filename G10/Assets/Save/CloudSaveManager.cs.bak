@@ -1,0 +1,139 @@
+﻿using GooglePlayGames;
+using GooglePlayGames.BasicApi.SavedGame;
+using System;
+using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
+using UnityEngine;
+
+public class CloudSaveManager : MonoSingleton<CloudSaveManager>
+{
+    public Action<SavedGameRequestStatus> OnSave;
+    public Action<SavedGameRequestStatus> OnLoad;
+
+    public SaveState State { get => state; set => state = value; }
+    private SaveState state;
+    private BinaryFormatter formatter;
+
+    public static CloudSaveManager instance;
+
+    private void Awake()
+    {
+        instance = this;
+    }
+
+    private void Start()
+    {
+        DontDestroyOnLoad(this.gameObject);
+        // Initialize the formatter
+        formatter = new BinaryFormatter();
+        // Create an Empty state
+        state = new SaveState();
+    }
+
+    public void UpdateState() 
+    {
+        state = new SaveState();
+<<<<<<< HEAD
+        state.Coins = coins;
+        state.Keys = keys;
+        state.Keyboards = keyboards;
+        state._ChlTime = ChlDatetime;
+        state.STATSWordsGuessed = PlayerPrefs.GetInt("Stats_WordsGuessed");
+        state.STATSLettersPlayed = PlayerPrefs.GetInt("Stats_LettersPlayed");
+        state.STATSLuckyGuesses = PlayerPrefs.GetInt("Stats_LuckyGuesses");
+        state.STATSChallangesWon = PlayerPrefs.GetInt("Stats_ChallangesWon");
+        state.STATSGamesPlayed = PlayerPrefs.GetInt("Stats_GamesPlayed");
+        state.STATSHighlevel = PlayerPrefs.GetInt("Stats_Highlevel");
+        state.STATSN_HighestScore = PlayerPrefs.GetInt("Stats_N_HighestScore");
+        state.STATSC_HighScore = PlayerPrefs.GetInt("Stats_C_HighScore"); 
+=======
+        state.Coins = StoreManager.instance.PlayerCoins;
+        state.Keys = StoreManager.instance.PlayerKeys;
+        state.Keyboards = StoreManager.instance.UnlockedKeys;
+        state.Backgrounds = StoreManager.instance.UnlockedBGs;
+        state._ChlTime = Title_CanvasManager.instance._ChlTime;
+        state.STATSWordsGuessed = PlayerPrefs.GetFloat("Stats_WordsGuessed");
+        state.STATSLettersPlayed = PlayerPrefs.GetFloat("Stats_LettersPlayed");
+        state.STATSLuckyGuesses = PlayerPrefs.GetFloat("Stats_LuckyGuesses");
+        state.STATSChallangesWon = PlayerPrefs.GetFloat("Stats_ChallangesWon");
+        state.STATSGamesPlayed = PlayerPrefs.GetFloat("Stats_GamesPlayed");
+        state.STATSHighlevel = PlayerPrefs.GetFloat("Stats_Highlevel");
+        state.STATSN_HighestScore = PlayerPrefs.GetFloat("Stats_N_HighestScore");
+        state.STATSC_HighScore = PlayerPrefs.GetFloat("Stats_C_HighScore"); 
+>>>>>>> main
+    }
+
+    // SaveState serializer
+    private byte[] SerializeState()
+    {
+        using (MemoryStream ms = new MemoryStream())
+        {
+            UpdateState(); //,Stats_Manager.instance.WordsGuessed, Stats_Manager.instance.LettersPlayed, Stats_Manager.instance.LuckyGuesses, Stats_Manager.instance.ChallangesWon, Stats_Manager.instance.GamesPlayed, Stats_Manager.instance.Highlevel, Stats_Manager.instance.N_HighestScore, Stats_Manager.instance.C_HighScore);
+            formatter.Serialize(ms, state);
+            return ms.GetBuffer();
+        }
+    }
+    private SaveState DeserializeState(byte[] data)
+    {
+        using (MemoryStream ms = new MemoryStream(data))
+        {
+            return (SaveState)formatter.Deserialize(ms);
+        }
+    }
+
+    // Google Cloud
+    public void SaveToCloud(Action<PlayServiceError> errorCallback = null)
+    {
+        PlayService.Instance.OpenCloudSave(OnSaveResponse, errorCallback);
+    }
+    private void OnSaveResponse(SavedGameRequestStatus status, ISavedGameMetadata meta)
+    {
+        if (status == SavedGameRequestStatus.Success)
+        {
+            byte[] data = SerializeState();
+            SavedGameMetadataUpdate update = new SavedGameMetadataUpdate.Builder()
+                .WithUpdatedDescription("Last save : " + DateTime.Now.ToString())
+                .Build();
+
+            var platform = (PlayGamesPlatform)Social.Active;
+            platform.SavedGame.CommitUpdate(meta, update, data, SaveCallback);
+        }
+        else
+            OnSave?.Invoke(status);
+    }
+    private void SaveCallback(SavedGameRequestStatus status, ISavedGameMetadata meta)
+    {
+        OnSave?.Invoke(status);
+    }
+
+    public void LoadFromCloud(Action<PlayServiceError> errorCallback = null)
+    {
+        PlayService.Instance.OpenCloudSave(OnLoadResponse, errorCallback);
+    }
+    private void OnLoadResponse(SavedGameRequestStatus status, ISavedGameMetadata meta)
+    {
+        if (status == SavedGameRequestStatus.Success)
+        {
+            var platform = (PlayGamesPlatform)Social.Active;
+            platform.SavedGame.ReadBinaryData(meta, LoadCallback);
+        }
+        else
+            OnLoad?.Invoke(status);
+    }
+    private void LoadCallback(SavedGameRequestStatus status, byte[] data)
+    {
+        state = DeserializeState(data);
+        OnLoad?.Invoke(status);
+    }
+    public void PostChallengeScore(int score)
+    {
+        //PostToLeaderboard(score,GPGSIds.leaderboard_leaderboard,meta, );
+        Social.ReportScore(score, GPGSIds.leaderboard_leaderboard, (bool success) =>
+        {
+            if (success)
+                Debug.Log("Score Posted to Leaderboards");
+            else
+                Debug.Log("Failed to Post Score to Leaderboards");
+        });
+    }
+}
